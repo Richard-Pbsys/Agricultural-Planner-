@@ -1,0 +1,184 @@
+﻿@page "/user/settings"
+@using Microsoft.AspNetCore.Components.Forms
+@using VHS.Services.Auth
+@using VHS.Services.Auth.DTO
+@using VHS.Client.Services
+@using VHS.Client.Services.Auth
+@using VHS.Client.Pages.User
+@using VHS.Client.Common
+@using VHS.Services.Common.Enums.Languages
+@using VHS.Services.Common.Enums.Themes
+@using VHS.Services.Common.Enums.Measurements
+@using MetricUnits = VHS.Services.Common.Enums.Measurements.Metric
+@using ImperialUnits = VHS.Services.Common.Enums.Measurements.Imperial
+@inject UserSettingClientService UserSettingClientService
+@inject LocalStorage LocalStorage
+@inject ISnackbar Snackbar
+
+<UserArea>
+    <EditForm Model="@userSettings" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <MudSelect T="string" Label="Language" @bind-Value="userSettings.PreferredLanguage" Variant="Variant.Outlined" Required="true">
+            @foreach (var item in languageMapping)
+            {
+                <MudSelectItem Value="@item.Value">@item.Key</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" Label="Theme" @bind-Value="userSettings.PreferredTheme" Variant="Variant.Outlined" Required="true">
+            @foreach (var theme in Enum.GetNames(typeof(ThemeEnum)))
+            {
+                <MudSelectItem Value="@theme">@theme</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" Label="Measurement System" Value="@userSettings.PreferredMeasurementSystem" Variant="Variant.Outlined" Required="true" ValueChanged="OnMeasurementSystemChanged">
+            @foreach (var ms in Enum.GetNames(typeof(MeasurementSystemEnum)))
+            {
+                <MudSelectItem Value="@ms">@ms</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="string" Label="Weight Unit" @bind-Value="userSettings.PreferredWeightUnit" Variant="Variant.Outlined" Required="true">
+            @foreach (var wu in WeightUnitOptions)
+            {
+                <MudSelectItem Value="@wu">@wu</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="string" Label="Length Unit" @bind-Value="userSettings.PreferredLengthUnit" Variant="Variant.Outlined" Required="true">
+            @foreach (var lu in LengthUnitOptions)
+            {
+                <MudSelectItem Value="@lu">@lu</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="string" Label="Temperature Unit" @bind-Value="userSettings.PreferredTemperatureUnit" Variant="Variant.Outlined" Required="true">
+            @foreach (var tu in TemperatureUnitOptions)
+            {
+                <MudSelectItem Value="@tu">@tu</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="string" Label="Volume Unit" @bind-Value="userSettings.PreferredVolumeUnit" Variant="Variant.Outlined" Required="true">
+            @foreach (var vu in VolumeUnitOptions)
+            {
+                <MudSelectItem Value="@vu">@vu</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Save</MudButton>
+    </EditForm>
+</UserArea>
+
+@code {
+    private Dictionary<string, string> languageMapping = new Dictionary<string, string>
+    {
+        { "English", "en-US" },
+        { "Dutch", "nl-NL" }
+    };
+
+    private UserSettingDTO userSettings = new UserSettingDTO();
+
+    private IEnumerable<string> WeightUnitOptions = Enumerable.Empty<string>();
+    private IEnumerable<string> LengthUnitOptions = Enumerable.Empty<string>();
+    private IEnumerable<string> TemperatureUnitOptions = Enumerable.Empty<string>();
+    private IEnumerable<string> VolumeUnitOptions = Enumerable.Empty<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userJson = await LocalStorage.GetStateAsync("VHS_USER");
+        if (!string.IsNullOrWhiteSpace(userJson))
+        {
+            var storedUser = System.Text.Json.JsonSerializer.Deserialize<UserDTO>(userJson);
+            if (storedUser != null)
+            {
+                Guid currentUserId = storedUser.Id;
+                var settings = await UserSettingClientService.GetUserSettingsByUserIdAsync(currentUserId);
+                if (settings != null)
+                {
+                    userSettings = settings;
+                }
+                else
+                {
+                    userSettings.UserId = currentUserId;
+                    userSettings.PreferredLanguage = "en-US";
+                    userSettings.PreferredTheme = ThemeEnum.Light.ToString();
+                    userSettings.PreferredMeasurementSystem = MeasurementSystemEnum.Metric.ToString();
+                    userSettings.PreferredWeightUnit = MetricUnits.WeightUnitEnum.Kilogram.ToString();
+                    userSettings.PreferredLengthUnit = MetricUnits.LengthUnitEnum.Meter.ToString();
+                    userSettings.PreferredTemperatureUnit = MetricUnits.TemperatureUnitEnum.Celsius.ToString();
+                    userSettings.PreferredVolumeUnit = MetricUnits.VolumeUnitEnum.Liter.ToString();
+                }
+                InitializeMeasurementUnitOptions(userSettings.PreferredMeasurementSystem);
+            }
+        }
+        else
+        {
+            Snackbar.Add("User not found.", MudBlazor.Severity.Warning);
+        }
+    }
+
+    private Task OnMeasurementSystemChanged(string newSystem)
+    {
+        userSettings.PreferredMeasurementSystem = newSystem;
+        InitializeMeasurementUnitOptions(newSystem, true);
+        return Task.CompletedTask;
+    }
+
+    private void InitializeMeasurementUnitOptions(string system, bool reset = false)
+    {
+        if (system == MeasurementSystemEnum.Metric.ToString())
+        {
+            WeightUnitOptions = Enum.GetNames(typeof(MetricUnits.WeightUnitEnum));
+            LengthUnitOptions = Enum.GetNames(typeof(MetricUnits.LengthUnitEnum));
+            TemperatureUnitOptions = Enum.GetNames(typeof(MetricUnits.TemperatureUnitEnum));
+            VolumeUnitOptions = Enum.GetNames(typeof(MetricUnits.VolumeUnitEnum));
+            if (reset)
+            {
+                userSettings.PreferredWeightUnit = MetricUnits.WeightUnitEnum.Kilogram.ToString();
+                userSettings.PreferredLengthUnit = MetricUnits.LengthUnitEnum.Meter.ToString();
+                userSettings.PreferredTemperatureUnit = MetricUnits.TemperatureUnitEnum.Celsius.ToString();
+                userSettings.PreferredVolumeUnit = MetricUnits.VolumeUnitEnum.Liter.ToString();
+            }
+            
+        }
+        else if (system == MeasurementSystemEnum.Imperial.ToString())
+        {
+            WeightUnitOptions = Enum.GetNames(typeof(ImperialUnits.WeightUnitEnum));
+            LengthUnitOptions = Enum.GetNames(typeof(ImperialUnits.LengthUnitEnum));
+            TemperatureUnitOptions = Enum.GetNames(typeof(ImperialUnits.TemperatureUnitEnum));
+            VolumeUnitOptions = Enum.GetNames(typeof(ImperialUnits.VolumeUnitEnum));
+            if (reset)
+            {
+                userSettings.PreferredWeightUnit = ImperialUnits.WeightUnitEnum.Pound.ToString();
+                userSettings.PreferredLengthUnit = ImperialUnits.LengthUnitEnum.Foot.ToString();
+                userSettings.PreferredTemperatureUnit = ImperialUnits.TemperatureUnitEnum.Fahrenheit.ToString();
+                userSettings.PreferredVolumeUnit = ImperialUnits.VolumeUnitEnum.Gallon.ToString();
+            }
+        }
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var updatedSettings = await UserSettingClientService.UpdateUserSettingsAsync(userSettings);
+            if (updatedSettings != null)
+            {
+                userSettings = updatedSettings;
+                var jsonSettings = System.Text.Json.JsonSerializer.Serialize(userSettings);
+                await LocalStorage.SaveStateAsync("VHS_USER_SETTINGS", jsonSettings);
+                Snackbar.Add("User settings updated successfully.", Severity.Success);
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Failed to update user settings.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

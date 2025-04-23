@@ -1,0 +1,107 @@
+﻿@page "/system-settings"
+@inject PageTitleService PageTitleService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge">
+    <MudGrid Spacing="10">
+        @foreach (var group in SettingGroups)
+        {
+            <MudItem xs="12" md="6">
+                <MudCard Class="system-settings-card">
+                    <MudCardContent>
+                        <MudGrid Spacing="2">
+                            <MudItem xs="4" md="3" Class="system-settings-head">
+                                <MudImage Src="@group.Icon" Class="system-settings-icon" />
+                                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-3">@group.Title</MudText>
+                            </MudItem>
+                            <MudItem xs="8" md="9">
+                                <MudList T="string">
+                                    @foreach (var setting in group.Settings)
+                                    {
+                                        <MudListItem T="string">
+                                            <MudLink Href="@setting.Url" Color="Color.Default">
+                                                <MudText>@setting.Title</MudText>
+                                            </MudLink>
+                                        </MudListItem>
+                                        @if (setting != group.Settings.Last())
+                                        {
+                                            <MudDivider />
+                                        }
+                                    }
+                                </MudList>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+</MudContainer>
+
+@code {
+    protected override void OnInitialized()
+    {
+        PageTitleService.Title = "System Settings";
+    }
+
+    private List<SettingGroup> SettingGroups = new()
+    {
+        new SettingGroup("Farm", "/images/farm/settings/farm.svg", new List<Setting>
+        {
+            new("Farm Management", "/system-settings/farm/management"),
+            new("Floors", "/system-settings/farm/floors"),
+            new("Racks", "/system-settings/farm/racks"),
+            new("Layers", "/system-settings/farm/layers"),
+            new("Trays", "/system-settings/farm/trays")
+        }),
+
+        new SettingGroup("Growth", "/images/farm/settings/growth.svg", new List<Setting>
+        {
+            new("Light Zones", "/system-settings/growth/light-zones"),
+            new("Lighting Schedules", "/system-settings/growth/lighting-plan"),
+            new("Water Zones", "/system-settings/growth/water-zones"),
+            new("Watering Schedules", "/system-settings/growth/watering-plan")
+        }),
+
+        new SettingGroup("Produce", "/images/farm/settings/produce.svg", new List<Setting>
+        {
+            new("Produce Types", "/system-settings/produce/types"),
+            new("Produce Variants", "/system-settings/produce/variants"),
+            new("Recipes", "/system-settings/produce/recipes"),
+            new("Recipe Lighting Schedules", "/system-settings/produce/recipe-lighting-schedules"),
+            new("Recipe Watering Schedules", "/system-settings/produce/recipe-watering-schedules")
+        }),
+
+        new SettingGroup("Batches", "/images/farm/settings/batches.svg", new List<Setting>
+        {
+            new("Batch Management", "/system-settings/batches/management"),
+            new("Batch Configurations", "/system-settings/batches/configurations"),
+            new("Batch Journal", "/system-settings/batches/journal")
+        })
+    };
+
+    private class SettingGroup
+    {
+        public string Title { get; }
+        public string Icon { get; }
+        public List<Setting> Settings { get; }
+
+        public SettingGroup(string title, string icon, List<Setting> settings)
+        {
+            Title = title;
+            Icon = icon;
+            Settings = settings;
+        }
+    }
+
+    private class Setting
+    {
+        public string Title { get; }
+        public string Url { get; }
+
+        public Setting(string title, string url)
+        {
+            Title = title;
+            Url = url;
+        }
+    }
+}

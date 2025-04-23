@@ -1,0 +1,268 @@
+﻿@page "/system-settings/growth/lighting-plan"
+@using Microsoft.AspNetCore.Components.Forms
+@using VHS.Services.Growth.Helpers
+@using VHS.Services.Growth.DTO
+@using VHS.Client.Services.Growth
+@inject LightZoneScheduleClientService LightZoneScheduleClientService
+@inject LightZoneClientService LightZoneClientService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<GrowthSettings>
+    <MudTable Items="@TimeBlocks" Dense="true" Striped="true" Loading="@IsLoading" LoadingProgressColor="Color.Info">
+        <ToolBarContent>
+            <MudText Typo="Typo.h5" Color="Color.Default">Lighting Schedules</MudText>
+            <MudSpacer />
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Light Zone" Variant="Variant.Outlined" Value="selectedLightZoneId" ValueChanged="OnZoneChanged" Required="true">
+                    @foreach (var zone in LightZones)
+                    {
+                        <MudSelectItem Value="@zone.Id">@zone.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudSpacer />
+            <MudTooltip Text="Save Lighting Schedules" Arrow="true" Placement="Placement.Top">
+                <MudButton OnClick="SavePlan" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4">Save</MudButton>
+            </MudTooltip>
+        </ToolBarContent>
+        <HeaderContent>
+            <MudTh>Time Start</MudTh>
+            <MudTh>Time End</MudTh>
+            <MudTh>Intensity (%)</MudTh>
+            <MudTh>Calculated DLI</MudTh>
+            <MudTh>Light Cycle</MudTh>
+            <MudTh>Actions</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Time Start">
+                <MudSelect Variant="Variant.Outlined" T="TimeOnly"
+                           Label="Time Start"
+                           @bind-Value="context.Start"
+                           @bind-Value:after="() => OnTimeChanged(context)">
+                    @foreach (var t in AvailableTimes)
+                    {
+                        <MudSelectItem Value="t">@t.ToString("HH:mm")</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudTd>
+
+            <MudTd DataLabel="Time End">
+                <MudSelect Variant="Variant.Outlined" T="TimeOnly"
+                           Label="Time End"
+                           @bind-Value="context.End"
+                           @bind-Value:after="() => OnTimeChanged(context)">
+                    @foreach (var t in AvailableTimes)
+                    {
+                        <MudSelectItem Value="t">@t.ToString("HH:mm")</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudTd>
+
+            <MudTd DataLabel="Intensity">
+                <MudNumericField Variant="Variant.Outlined" T="decimal?"
+                                 @bind-Value="context.Intensity"
+                                 Label="Intensity"
+                                 Min="0" Max="100"
+                                 Immediate="true"
+                                 OnBlur="@(() => UpdateBlockDLI(context))" />
+            </MudTd>
+
+            <MudTd DataLabel="Calculated DLI">
+                <MudTextField T="string"
+                              Value="@($"{context.CalculatedDLI.Value:F2} mol/m²/d")"
+                              Label="Calculated DLI"
+                              Variant="Variant.Outlined"
+                              ReadOnly="true" />
+            </MudTd>
+
+            <MudTd DataLabel="Light Cycle">
+                <MudChart ChartType="ChartType.Line"
+                          ChartSeries="@context.ChartSeries"
+                          Width="150px"
+                          Height="50px" />
+            </MudTd>
+
+            <MudTd DataLabel="Actions">
+                <MudButton Variant="Variant.Text" OnClick="@(() => OpenLightCurveModal(context))">
+                    View
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</GrowthSettings>
+
+@code {
+    private List<TimeOnly> AvailableTimes = Enumerable.Range(0, 24).Select(h => new TimeOnly(h, 0)).ToList();
+    private List<string> XAxisLabelsFull = Enumerable.Range(0, 24)
+        .Select(h =>
+            h == 0 || h == 23 || h % 3 == 0
+                ? new TimeOnly(h, 0).ToString("HH:mm")
+                : "")
+        .ToList();
+
+    private List<LightingTimeBlock> TimeBlocks = new();
+    private List<LightZoneDTO> LightZones = new();
+    private Guid selectedLightZoneId;
+
+    private bool IsLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LightZones = (await LightZoneClientService.GetAllLightZonesAsync())?.ToList() ?? new List<LightZoneDTO>();
+        if (LightZones.Any())
+        {
+            selectedLightZoneId = LightZones.First().Id;
+            await OnZoneChanged(selectedLightZoneId);
+        }
+    }
+
+    private double CalculateDLIForBlock(decimal intensity, TimeOnly start, TimeOnly end)
+        => LightZoneScheduleDLIHelper.CalculateDLI(intensity, start, end);
+
+    private async Task OnTimeChanged(LightingTimeBlock block)
+    {
+        block.CalculatedDLI = CalculateDLIForBlock(block.Intensity ?? 0, block.Start, block.End);
+        GenerateLightCurve(block);
+        StateHasChanged();
+        await Task.CompletedTask;
+    }
+
+    private void UpdateBlockDLI(LightingTimeBlock block)
+    {
+        block.CalculatedDLI = CalculateDLIForBlock(block.Intensity ?? 0, block.Start, block.End);
+        GenerateLightCurve(block);
+        StateHasChanged();
+    }
+
+    private void GenerateLightCurve(LightingTimeBlock block)
+    {
+        var intensity = (double)(block.Intensity ?? 0);
+        var dliValue = CalculateDLIForBlock(block.Intensity ?? 0, block.Start, block.End);
+        var fullCurve = new double[24];
+        var dliCurve = new double[24];
+
+        for (int i = 0; i < 24; i++)
+        {
+            var currentHour = new TimeOnly(i, 0);
+            bool isInRange = IsTimeInRange(currentHour, block.Start, block.End);
+            fullCurve[i] = isInRange ? intensity : 0;
+            dliCurve[i] = isInRange ? dliValue : 0;
+        }
+
+        block.ChartSeries = new List<ChartSeries>
+        {
+            new ChartSeries { Name = "Intensity", Data = fullCurve },
+            new ChartSeries { Name = "DLI", Data = dliCurve }
+        };
+
+        block.ChartXAxisLabels = XAxisLabelsFull;
+    }
+
+    private static bool IsTimeInRange(TimeOnly hour, TimeOnly start, TimeOnly end)
+    {
+        return start < end ? (hour >= start && hour < end) : (hour >= start || hour < end);
+    }
+
+    private async Task OpenLightCurveModal(LightingTimeBlock block)
+    {
+        var parameters = new DialogParameters
+        {
+            { "SelectedBlock", block },
+            { "XAxisLabelsFull", XAxisLabelsFull.ToArray() }
+        };
+
+        var options = new DialogOptions
+            {
+                CloseButton = true,
+                MaxWidth = MaxWidth.Medium,
+                FullWidth = true,
+                Position = DialogPosition.TopCenter
+            };
+
+        await DialogService.ShowAsync<LightingPlanDialog>("Light Cycle", parameters, options);
+    }
+
+    private LightZoneScheduleDTO MapBlockToDTO(LightingTimeBlock block)
+    {
+        return new LightZoneScheduleDTO
+            {
+                Id = block.Id,
+                LightZone = new LightZoneDTO { Id = selectedLightZoneId },
+                StartTime = block.Start,
+                EndTime = block.End,
+                Intensity = block.Intensity ?? 0,
+                CalculatedDLI = block.CalculatedDLI
+            };
+    }
+
+    private async Task OnZoneChanged(Guid newZoneId)
+    {
+        selectedLightZoneId = newZoneId;
+        IsLoading = true;
+        TimeBlocks.Clear();
+
+        var existingSchedules = await LightZoneScheduleClientService.GetSchedulesByZoneAsync(newZoneId);
+
+        for (int hour = 0; hour < 24; hour++)
+        {
+            var start = new TimeOnly(hour, 0);
+            var match = existingSchedules
+                            .FirstOrDefault(s => s.StartTime == start);
+
+            var block = match != null
+                ? new LightingTimeBlock
+                    {
+                        Id = match.Id,
+                        Start = match.StartTime,
+                        End = match.EndTime,
+                        Intensity = match.Intensity,
+                        CalculatedDLI = match.CalculatedDLI
+                    }
+                : new LightingTimeBlock
+                    {
+                        Start = start,
+                        End = new TimeOnly((hour + 1) % 24, 0),
+                        Intensity = 50m
+                    };
+
+            GenerateLightCurve(block);
+            block.CalculatedDLI = CalculateDLIForBlock(block.Intensity ?? 0, block.Start, block.End);
+            TimeBlocks.Add(block);
+        }
+
+        IsLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task SavePlan()
+    {
+        if (selectedLightZoneId == Guid.Empty)
+        {
+            Snackbar.Add("Please select a Light Zone before saving.", Severity.Warning);
+            return;
+        }
+
+        IsLoading = true;
+
+        foreach (var block in TimeBlocks)
+        {
+            var dto = MapBlockToDTO(block);
+            dto.LightZone.Id = selectedLightZoneId;
+
+            if (dto.Id == Guid.Empty)
+            {
+                var created = await LightZoneScheduleClientService.CreateLightZoneScheduleAsync(dto);
+                block.Id = created.Id;
+            }
+            else
+            {
+                await LightZoneScheduleClientService.UpdateLightZoneScheduleAsync(dto);
+            }
+        }
+
+        IsLoading = false;
+        Snackbar.Add("Lighting schedules saved successfully.", Severity.Success);
+    }
+}

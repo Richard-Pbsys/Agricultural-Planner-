@@ -1,0 +1,111 @@
+﻿@using VHS.Services.Farming.DTO
+@using VHS.Services.Growth.DTO
+@using VHS.Services.Produce.DTO
+@using VHS.Client.Services.Farming
+@using VHS.Client.Services.Produce
+@using VHS.Client.Services.Growth
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+@inject RecipeClientService RecipeClientService
+@inject WaterZoneScheduleClientService WaterZoneScheduleClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Schedule" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Recipe" Variant="Variant.Outlined" @bind-Value="SelectedRecipeId" Required="true">
+                    @foreach (var recipe in Recipes)
+                    {
+                        <MudSelectItem Value="@recipe.Id">@recipe.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid" Label="Water Zone Schedule" Variant="Variant.Outlined" @bind-Value="SelectedWaterZoneScheduleId" Required="true">
+                    @foreach (var wzs in WaterZoneSchedules)
+                    {
+                        <MudSelectItem Value="@wzs.Id">
+                            @($"{wzs.WaterZone.Name} ({wzs.StartTime.ToString("hh:mm tt").ToUpper()} - {wzs.EndTime.ToString("hh:mm tt").ToUpper()}) {wzs.Volume} {wzs.VolumeUnit}")
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudNumericField T="double?" @bind-Value="Schedule.TargetDWR" Label="Target DWR" HelperText="Target Daily Water Requirement (DWR) in L/m²/d that the recipe requires" Variant="Variant.Outlined" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public RecipeWaterScheduleDTO Schedule { get; set; } = new RecipeWaterScheduleDTO();
+
+    private MudForm form = new MudForm();
+
+    private List<RecipeDTO> Recipes = new List<RecipeDTO>();
+    private Guid SelectedRecipeId;
+
+    private List<WaterZoneScheduleDTO> WaterZoneSchedules = new List<WaterZoneScheduleDTO>();
+    private Guid SelectedWaterZoneScheduleId;
+
+    private string DialogTitle => Schedule.Id == Guid.Empty ? "Add Recipe Watering Schedule" : "Edit Recipe Watering Schedule";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Recipes = (await RecipeClientService.GetAllRecipesAsync())?.ToList() ?? new List<RecipeDTO>();
+        WaterZoneSchedules = (await WaterZoneScheduleClientService.GetAllSchedulesAsync())?.ToList() ?? new List<WaterZoneScheduleDTO>();
+
+        Schedule.Recipe ??= new RecipeDTO();
+        Schedule.Recipe.Product ??= new ProductDTO();
+
+        Schedule.WaterZoneSchedule ??= new WaterZoneScheduleDTO();
+        Schedule.WaterZoneSchedule.WaterZone ??= new WaterZoneDTO();
+
+        if (Schedule.Recipe.Id != Guid.Empty)
+        {
+            SelectedRecipeId = Schedule.Recipe.Id;
+        }
+        else if (Recipes.Any())
+        {
+            SelectedRecipeId = Recipes.First().Id;
+        }
+
+        if (Schedule.WaterZoneSchedule.Id != Guid.Empty)
+        {
+            SelectedWaterZoneScheduleId = Schedule.WaterZoneSchedule.Id;
+        }
+        else if (WaterZoneSchedules.Any())
+        {
+            SelectedWaterZoneScheduleId = WaterZoneSchedules.First().Id;
+        }
+
+        IsLoading = false;
+    }
+
+    private void Save()
+    {
+        if (form != null && !IsLoading)
+        {
+            Schedule.Recipe.Id = SelectedRecipeId;
+            var recipe = Recipes.FirstOrDefault(r => r.Id == SelectedRecipeId);
+            if (recipe != null)
+            {
+                Schedule.Recipe.Name = recipe.Name;
+            }
+
+            Schedule.WaterZoneSchedule.Id = SelectedWaterZoneScheduleId;
+            var wzs = WaterZoneSchedules.FirstOrDefault(l => l.Id == SelectedWaterZoneScheduleId);
+            if (wzs != null)
+            {
+                Schedule.WaterZoneSchedule.WaterZone.Name = wzs.WaterZone.Name;
+            }
+            MudDialog.Close(DialogResult.Ok(Schedule));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

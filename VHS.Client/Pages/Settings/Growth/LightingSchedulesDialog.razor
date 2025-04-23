@@ -1,0 +1,123 @@
+﻿@using VHS.Services.Growth.DTO
+@using VHS.Client.Services.Growth
+@using Microsoft.AspNetCore.Components.Forms
+@using VHS.Services.Growth.Helpers
+@inject ISnackbar Snackbar
+@inject LightZoneScheduleClientService LightZoneScheduleClientService
+@inject LightZoneClientService LightZoneClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Schedule" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Light Zone" Variant="Variant.Outlined" @bind-Value="selectedLightZoneId" Required="true">
+                    @foreach (var zone in LightZones)
+                    {
+                        <MudSelectItem Value="@zone.Id">@zone.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTimePicker T="TimeSpan?"
+                           @bind-Time="startTimeSpan"
+                           @bind-Time:after="async () => await UpdateDLIAsync()"
+                           Label="Start Time"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           AmPm="true" />
+            <MudTimePicker T="TimeSpan?"
+                           @bind-Time="endTimeSpan"
+                           @bind-Time:after="async () => await UpdateDLIAsync()"
+                           Label="End Time"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           AmPm="true" />
+            <MudNumericField T="decimal"
+                             @bind-Value="Schedule.Intensity"
+                             @bind-Value:after="async () => await UpdateDLIAsync()"
+                             Label="Intensity"
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             Min="0"
+                             Max="100"
+                             HelperText="Enter the light intensity as a percentage (0-100%) that will be applied during the scheduled period." />
+            <MudTextField T="string"
+                          Value="@(Schedule.CalculatedDLI.HasValue ? Schedule.CalculatedDLI.Value.ToString("F2") : "")"
+                          Label="Calculated DLI"
+                          Variant="Variant.Outlined"
+                          HelperText="Daily Light Integral (DLI) in mol/m²/d" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || !form.IsValid || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public LightZoneScheduleDTO Schedule { get; set; } = new LightZoneScheduleDTO();
+
+    private MudForm form = new MudForm();
+
+    private TimeSpan? startTimeSpan;
+    private TimeSpan? endTimeSpan;
+
+    private List<LightZoneDTO> LightZones = new List<LightZoneDTO>();
+    private Guid selectedLightZoneId;
+
+    private string DialogTitle => Schedule.Id == Guid.Empty ? "Add Light Zone Schedule" : "Edit Light Zone Schedule";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LightZones = (await LightZoneClientService.GetAllLightZonesAsync())?.ToList() ?? new List<LightZoneDTO>();
+
+        if (Schedule.LightZone != null && Schedule.LightZone.Id != Guid.Empty)
+        {
+            selectedLightZoneId = Schedule.LightZone.Id;
+        }
+        else if (LightZones.Any())
+        {
+            selectedLightZoneId = LightZones.First().Id;
+        }
+
+        startTimeSpan = Schedule.StartTime.ToTimeSpan();
+        endTimeSpan = Schedule.EndTime.ToTimeSpan();
+
+        await UpdateDLIAsync();
+        IsLoading = false;
+    }
+
+    private async Task UpdateDLIAsync()
+    {
+        if (startTimeSpan.HasValue && endTimeSpan.HasValue)
+        {
+            Schedule.StartTime = TimeOnly.FromTimeSpan(startTimeSpan.Value);
+            Schedule.EndTime = TimeOnly.FromTimeSpan(endTimeSpan.Value);
+            if (Schedule.LightZone == null)
+            {
+                Schedule.LightZone = new LightZoneDTO();
+            }
+            Schedule.LightZone.Id = selectedLightZoneId;
+
+            double newDLI = await LightZoneScheduleClientService.CalculateDLI(Schedule);
+            Schedule.CalculatedDLI = newDLI;
+            StateHasChanged();
+        }
+    }
+
+    private void Save()
+    {
+        if (startTimeSpan.HasValue && endTimeSpan.HasValue)
+        {
+            Schedule.StartTime = TimeOnly.FromTimeSpan(startTimeSpan.Value);
+            Schedule.EndTime = TimeOnly.FromTimeSpan(endTimeSpan.Value);
+            Schedule.LightZone.Id = selectedLightZoneId;
+            MudDialog.Close(DialogResult.Ok(Schedule));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

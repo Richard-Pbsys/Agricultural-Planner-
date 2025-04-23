@@ -1,0 +1,73 @@
+﻿@page "/user/profile"
+@using Microsoft.AspNetCore.Components.Forms
+@using VHS.Services.Auth
+@using VHS.Services.Auth.DTO
+@using VHS.Client.Services
+@using VHS.Client.Services.Auth
+@using VHS.Client.Pages.User
+@inject UserClientService UserClientService
+@inject LocalStorage LocalStorage
+@inject ISnackbar Snackbar
+
+<UserArea>
+    <EditForm Model="@userProfile" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <MudTextField @bind-Value="userProfile.FirstName" Label="First Name" Variant="Variant.Outlined" Required="true" />
+        <MudTextField @bind-Value="userProfile.LastName" Label="Last Name" Variant="Variant.Outlined" Required="true" />
+        <MudTextField @bind-Value="userProfile.Email" Label="Email" Variant="Variant.Outlined" Required="true" />
+        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">Save</MudButton>
+    </EditForm>
+</UserArea>
+
+@code {
+    private UserDTO userProfile = new UserDTO();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userJson = await LocalStorage.GetStateAsync("VHS_USER");
+        if (!string.IsNullOrWhiteSpace(userJson))
+        {
+            var storedUser = System.Text.Json.JsonSerializer.Deserialize<UserDTO>(userJson);
+            if (storedUser != null)
+            {
+                var user = await UserClientService.GetUserByIdAsync(storedUser.Id);
+                if (user != null)
+                {
+                    userProfile = user;
+                }
+                else
+                {
+                    Snackbar.Add("User profile not found.", Severity.Error);
+                }
+            }
+        }
+        else
+        {
+            Snackbar.Add("User not found.", Severity.Warning);
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var updatedUser = await UserClientService.UpdateUserAsync(userProfile);
+            if (updatedUser != null)
+            {
+                userProfile = updatedUser;
+                var json = System.Text.Json.JsonSerializer.Serialize(userProfile);
+                await LocalStorage.SaveStateAsync("VHS_USER", json);
+                Snackbar.Add("User profile updated successfully.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Failed to update user profile.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+}

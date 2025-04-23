@@ -1,0 +1,39 @@
+﻿@using VHS.Services.Farming.DTO
+@inject ISnackbar Snackbar
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Farm" IsValid="IsValid">
+            <MudTextField @bind-Value="Farm.Name" Label="Farm Name" Variant="Variant.Outlined" Required="true" />
+            <MudTextField @bind-Value="Farm.Description" Lines="3" Variant="Variant.Outlined" Label="Description" />
+            <MudSelect @bind-Value="Farm.FarmTypeId" Label="Farm Type" Variant="Variant.Outlined" Required="true">
+                @foreach (var type in FarmTypes)
+                {
+                    <MudSelectItem Value="@type.Id">@type.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="!IsValid" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public FarmDTO Farm { get; set; } = new FarmDTO();
+    [Parameter] public List<FarmTypeDTO> FarmTypes { get; set; } = new();
+
+    private string DialogTitle => Farm.Id == Guid.Empty ? "Add New Farm" : "Edit Farm";
+
+    private bool IsValid => !string.IsNullOrWhiteSpace(Farm.Name) && Farm.FarmTypeId != Guid.Empty;
+
+    private void Save()
+    {
+        MudDialog.Close(DialogResult.Ok(Farm));
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

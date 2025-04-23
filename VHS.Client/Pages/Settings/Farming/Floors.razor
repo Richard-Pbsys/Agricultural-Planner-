@@ -1,0 +1,51 @@
+﻿@page "/system-settings/farm/floors"
+@using VHS.Services.Farming
+@using VHS.Services.Farming.DTO
+@using VHS.Client.Services.Farming
+@using VHS.Client.Pages.Settings.Farming
+@inject FloorClientService FloorsClientService
+@inject ISnackbar Snackbar
+
+<FarmSettings>
+    <MudDataGrid Items="@FloorList" Hover="true" Loading="@IsLoading" LoadingProgressColor="Color.Info">
+        <ToolBarContent>
+            <MudText Typo="Typo.h5" Color="Color.Default">Floors</MudText>
+            <MudSpacer />
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="x => x.Name" Title="Name" Sortable="true" />
+            <PropertyColumn Property="x => x.FloorNumber" Title="Floor Number" Sortable="true" />
+            <TemplateColumn Title="Enabled" Sortable="true">
+                <CellTemplate Context="context">
+                    <MudChip Color="@(context.Item.Enabled ? Color.Success : Color.Error)" Label="true" Variant="Variant.Outlined" Size="Size.Medium">
+                        @(context.Item.Enabled ? "Yes" : "No")
+                    </MudChip>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager Items="@FloorList" />
+        </PagerContent>
+    </MudDataGrid>
+    @if (FloorList == null || !FloorList.Any())
+    {
+        <MudAlert Severity="Severity.Info">No floors found.</MudAlert>
+    }
+</FarmSettings>
+
+@code {
+    private IEnumerable<FloorDTO>? FloorList;
+    private bool IsLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFloors();
+    }
+
+    private async Task LoadFloors()
+    {
+        IsLoading = true;
+        FloorList = await FloorsClientService.GetAllFloorsAsync();
+        IsLoading = false;
+    }
+}

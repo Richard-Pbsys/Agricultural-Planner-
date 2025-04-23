@@ -1,0 +1,32 @@
+﻿@using VHS.Client.Services.Growth
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        @if (SelectedBlock != null)
+        {
+            <MudChart ChartType="ChartType.Line"
+                      ChartSeries="@SelectedBlock.ChartSeries"
+                      XAxisLabels="@XAxisLabelsFull.ToArray()"
+                      Width="100%"
+                      Height="300px" />
+        }
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Close</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public LightingTimeBlock SelectedBlock { get; set; } = new();
+    [Parameter] public IEnumerable<string> XAxisLabelsFull { get; set; } = Enumerable.Empty<string>();
+
+    private string DialogTitle => SelectedBlock != null
+        ? $"Light Cycle: {SelectedBlock.Start:HH\\:mm} - {SelectedBlock.End:HH\\:mm}"
+        : "Light Cycle";
+
+    private void Cancel() => MudDialog.Cancel();
+}

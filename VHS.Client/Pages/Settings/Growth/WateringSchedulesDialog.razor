@@ -1,0 +1,170 @@
+﻿@using VHS.Services.Growth.DTO
+@using VHS.Client.Services.Auth
+@using VHS.Client.Services.Growth
+@using Microsoft.AspNetCore.Components.Forms
+@using VHS.Services.Auth.DTO
+@using VHS.Services.Farming.DTO
+@using System.Text.Json
+@using MetricUnits = VHS.Services.Common.Enums.Measurements.Metric
+@using ImperialUnits = VHS.Services.Common.Enums.Measurements.Imperial
+@using VHS.Services.Growth.Helpers
+@inject ISnackbar Snackbar
+@inject WaterZoneScheduleClientService WaterZoneScheduleClientService
+@inject WaterZoneClientService WaterZoneClientService
+@inject UserSettingClientService UserSettingClientService
+@inject LocalStorage LocalStorage
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Schedule" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Water Zone" Variant="Variant.Outlined" @bind-Value="selectedWaterZoneId" Required="true">
+                    @foreach (var zone in WaterZones)
+                    {
+                        <MudSelectItem Value="@zone.Id">@zone.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTimePicker T="TimeSpan?"
+                           @bind-Time="startTimeSpan"
+                           @bind-Time:after="async () => await UpdateDWRAsync()"
+                           Label="Start Time"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           AmPm="true" />
+            <MudTimePicker T="TimeSpan?"
+                           @bind-Time="endTimeSpan"
+                           @bind-Time:after="async () => await UpdateDWRAsync()"
+                           Label="End Time"
+                           Variant="Variant.Outlined"
+                           Required="true"
+                           AmPm="true" />
+            <MudNumericField T="decimal"
+                             @bind-Value="Schedule.Volume"
+                             @bind-Value:after="async () => await UpdateDWRAsync()"
+                             Label="Volume"
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             HelperText="Enter the total water volume (in liters) that will be applied during the scheduled period." />
+            <MudSelect T="string" Label="Volume Unit" Variant="Variant.Outlined" @bind-Value="Schedule.VolumeUnit" Required="true" Class="d-none">
+                @foreach (var vu in VolumeUnitOptions)
+                {
+                    <MudSelectItem Value="@vu">@vu</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField T="string"
+                          Value="@(Schedule.CalculatedDWR.HasValue ? Schedule.CalculatedDWR.Value.ToString("F2") : "")"
+                          Label="Calculated DWR"
+                          Variant="Variant.Outlined"
+                          HelperText="Daily Water Requirement (DWR) in L/m²/d" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public WaterZoneScheduleDTO Schedule { get; set; } = new WaterZoneScheduleDTO();
+
+    private MudForm form = new MudForm();
+
+    private TimeSpan? startTimeSpan;
+    private TimeSpan? endTimeSpan;
+
+    private List<WaterZoneDTO> WaterZones = new List<WaterZoneDTO>();
+    private Guid selectedWaterZoneId;
+
+    private List<string> VolumeUnitOptions = new List<string>();
+
+    private string DialogTitle => Schedule.Id == Guid.Empty ? "Add Watering Schedule" : "Edit Watering Schedule";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        WaterZones = (await WaterZoneClientService.GetAllWaterZonesAsync())?.ToList() ?? new List<WaterZoneDTO>();
+
+        if (Schedule.WaterZone != null && Schedule.WaterZone.Id != Guid.Empty)
+        {
+            selectedWaterZoneId = Schedule.WaterZone.Id;
+        }
+        else if (WaterZones.Any())
+        {
+            selectedWaterZoneId = WaterZones.First().Id;
+        }
+
+        startTimeSpan = Schedule.StartTime.ToTimeSpan();
+        endTimeSpan = Schedule.EndTime.ToTimeSpan();
+
+        var userSettingsJson = await LocalStorage.GetStateAsync("VHS_USER_SETTINGS");
+        if (!string.IsNullOrWhiteSpace(userSettingsJson))
+        {
+            var userSettings = JsonSerializer.Deserialize<UserSettingDTO>(userSettingsJson);
+            if (userSettings != null)
+            {
+                if (userSettings.PreferredMeasurementSystem == "Metric")
+                {
+                    VolumeUnitOptions = Enum.GetNames(typeof(MetricUnits.VolumeUnitEnum)).ToList();
+                    if (string.IsNullOrEmpty(Schedule.VolumeUnit))
+                    {
+                        // Default to "Liter" if available.
+                        Schedule.VolumeUnit = VolumeUnitOptions.Contains("Liter") ? "Liter" : VolumeUnitOptions.First();
+                    }
+                }
+                else if (userSettings.PreferredMeasurementSystem == "Imperial")
+                {
+                    VolumeUnitOptions = Enum.GetNames(typeof(ImperialUnits.VolumeUnitEnum)).ToList();
+                    // Remove "Liter" for Imperial systems.
+                    VolumeUnitOptions.Remove("Liter");
+                    if (string.IsNullOrEmpty(Schedule.VolumeUnit))
+                    {
+                        Schedule.VolumeUnit = VolumeUnitOptions.FirstOrDefault() ?? "Gallon";
+                    }
+                }
+            }
+        }
+        if (VolumeUnitOptions == null || !VolumeUnitOptions.Any())
+        {
+            VolumeUnitOptions = new List<string> { "Liter" };
+            Schedule.VolumeUnit = "Liter";
+        }
+
+        await UpdateDWRAsync();
+        IsLoading = false;
+    }
+
+    private async Task UpdateDWRAsync()
+    {
+        if (startTimeSpan.HasValue && endTimeSpan.HasValue)
+        {
+            Schedule.StartTime = TimeOnly.FromTimeSpan(startTimeSpan.Value);
+            Schedule.EndTime = TimeOnly.FromTimeSpan(endTimeSpan.Value);
+            if (Schedule.WaterZone == null)
+            {
+                Schedule.WaterZone = new WaterZoneDTO();
+            }
+            Schedule.WaterZone.Id = selectedWaterZoneId;
+
+            double newDWR = await WaterZoneScheduleClientService.CalculateDWR(Schedule);
+            Schedule.CalculatedDWR = newDWR;
+            StateHasChanged();
+        }
+    }
+
+    private void Save()
+    {
+        if (startTimeSpan.HasValue && endTimeSpan.HasValue)
+        {
+            Schedule.StartTime = TimeOnly.FromTimeSpan(startTimeSpan.Value);
+            Schedule.EndTime = TimeOnly.FromTimeSpan(endTimeSpan.Value);
+            Schedule.WaterZone.Id = selectedWaterZoneId;
+            MudDialog.Close(DialogResult.Ok(Schedule));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

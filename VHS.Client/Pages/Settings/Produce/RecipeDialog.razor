@@ -1,0 +1,68 @@
+﻿@using VHS.Services.Produce.DTO
+@using VHS.Client.Services.Produce
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+@inject ProductClientService ProductClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Recipe" @ref="form" Immediate="true">
+            <MudTextField @bind-Value="Recipe.Name" Label="Name" Variant="Variant.Outlined" Required="true" />
+            <MudTextField @bind-Value="Recipe.Description" Label="Description" Lines="3" Variant="Variant.Outlined" />
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid?" Label="Produce Variant" Variant="Variant.Outlined" @bind-Value="SelectedProductId" Required="true" Disabled="@IsLoading">
+                    @foreach (var product in Products.OrderBy(x => x.Name))
+                    {
+                        <MudSelectItem Value="@( (Guid?)product.Id )">@product.Name (@product.ProductCategoryName)</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudNumericField T="int" @bind-Value="Recipe.GrowDays" Label="Grow Days" Variant="Variant.Outlined" Required="true" />
+            <MudNumericField T="int" @bind-Value="Recipe.PropagationDays" Label="Propagation Days" Variant="Variant.Outlined" Required="true" />
+            <MudNumericField T="int" @bind-Value="Recipe.GerminationDays" Label="Germination Days" Variant="Variant.Outlined" Required="true" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public RecipeDTO Recipe { get; set; } = new RecipeDTO { Product = new ProductDTO() };
+
+    private MudForm form = new MudForm();
+    private List<ProductDTO> Products = new();
+    private bool IsLoading { get; set; } = true;
+
+    private Guid? SelectedProductId { get; set; }
+
+    private string DialogTitle => Recipe.Id == Guid.Empty ? "Add Recipe" : "Edit Recipe";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Products = (await ProductClientService.GetAllProductsAsync())?.ToList() ?? new List<ProductDTO>();
+
+        Recipe ??= new RecipeDTO();
+        Recipe.Product ??= new ProductDTO();
+        SelectedProductId = Recipe.Product.Id != Guid.Empty ? Recipe.Product.Id : (Guid?)null;
+
+        IsLoading = false;
+    }
+
+    private void Save()
+    {
+        if (form.IsValid && !IsLoading)
+        {
+            Recipe.Product = SelectedProductId.HasValue
+                ? Products.FirstOrDefault(p => p.Id == SelectedProductId.Value) ?? new ProductDTO()
+                : new ProductDTO();
+
+            MudDialog.Close(DialogResult.Ok(Recipe));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

@@ -1,0 +1,68 @@
+﻿@using VHS.Services.Growth.DTO
+@using VHS.Services.Farming.DTO
+@using VHS.Client.Services.Farming
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+@inject FarmClientService FarmClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="LightZone" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Farm" @bind-Value="SelectedFarmId" Variant="Variant.Outlined" Required="true">
+                    @foreach (var farm in Farms)
+                    {
+                        <MudSelectItem Value="@farm.Id">@farm.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField @bind-Value="LightZone.Name" Label="Name" Variant="Variant.Outlined" Required="true" />
+            <MudNumericField T="double?" @bind-Value="LightZone.TargetDLI" Label="Target DLI" HelperText="Daily Light Integral (DLI) in mol/m²/d" Variant="Variant.Outlined" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public LightZoneDTO LightZone { get; set; } = new LightZoneDTO();
+
+    private MudForm form = new MudForm();
+    private List<FarmDTO> Farms = new List<FarmDTO>();
+    private Guid SelectedFarmId { get; set; }
+
+    private string DialogTitle => LightZone.Id == Guid.Empty ? "Add Light Zone" : "Edit Light Zone";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Farms = (await FarmClientService.GetAllFarmsAsync())?.ToList() ?? new List<FarmDTO>();
+
+        if (LightZone.FarmId != Guid.Empty)
+        {
+            SelectedFarmId = LightZone.FarmId;
+        }
+        else if (Farms.Any())
+        {
+            SelectedFarmId = Farms.First().Id;
+        }
+
+        IsLoading = false;
+    }
+
+    private void Save()
+    {
+        if (form != null && !IsLoading)
+        {
+            LightZone.FarmId = SelectedFarmId;
+            MudDialog.Close(DialogResult.Ok(LightZone));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

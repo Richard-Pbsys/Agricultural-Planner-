@@ -1,0 +1,111 @@
+﻿@using VHS.Services.Farming.DTO
+@using VHS.Services.Growth.DTO
+@using VHS.Services.Produce.DTO
+@using VHS.Client.Services.Farming
+@using VHS.Client.Services.Produce
+@using VHS.Client.Services.Growth
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+@inject RecipeClientService RecipeClientService
+@inject LightZoneScheduleClientService LightZoneScheduleClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="Schedule" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Recipe" Variant="Variant.Outlined" @bind-Value="SelectedRecipeId" Required="true">
+                    @foreach (var recipe in Recipes)
+                    {
+                        <MudSelectItem Value="@recipe.Id">@recipe.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="Guid" Label="Light Zone Schedule" Variant="Variant.Outlined" @bind-Value="SelectedLightZoneScheduleId" Required="true">
+                    @foreach (var lzs in LightZoneSchedules)
+                    {
+                        <MudSelectItem Value="@lzs.Id">
+                            @($"{lzs.LightZone.Name} ({lzs.StartTime.ToString("hh:mm tt")} - {lzs.EndTime.ToString("hh:mm tt")}) {lzs.CalculatedDLI?.ToString("F2")} mol/m²/d")
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudNumericField T="double?" @bind-Value="Schedule.TargetDLI" Label="Target DLI" HelperText="Target Daily Light Integral (DLI) in mol/m²/d that the recipe requires" Variant="Variant.Outlined" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public RecipeLightScheduleDTO Schedule { get; set; } = new RecipeLightScheduleDTO();
+
+    private MudForm form = new MudForm();
+
+    private List<RecipeDTO> Recipes = new List<RecipeDTO>();
+    private Guid SelectedRecipeId;
+
+    private List<LightZoneScheduleDTO> LightZoneSchedules = new List<LightZoneScheduleDTO>();
+    private Guid SelectedLightZoneScheduleId;
+
+    private string DialogTitle => Schedule.Id == Guid.Empty ? "Add Recipe Lighting Schedule" : "Edit Recipe Lighting Schedule";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Recipes = (await RecipeClientService.GetAllRecipesAsync())?.ToList() ?? new List<RecipeDTO>();
+        LightZoneSchedules = (await LightZoneScheduleClientService.GetAllLightZoneSchedulesAsync())?.ToList() ?? new List<LightZoneScheduleDTO>();
+
+        Schedule.Recipe ??= new RecipeDTO();
+        Schedule.Recipe.Product ??= new ProductDTO();
+
+        Schedule.LightZoneSchedule ??= new LightZoneScheduleDTO();
+        Schedule.LightZoneSchedule.LightZone ??= new LightZoneDTO();
+
+        if (Schedule.Recipe.Id != Guid.Empty)
+        {
+            SelectedRecipeId = Schedule.Recipe.Id;
+        }
+        else if (Recipes.Any())
+        {
+            SelectedRecipeId = Recipes.First().Id;
+        }
+
+        if (Schedule.LightZoneSchedule.Id != Guid.Empty)
+        {
+            SelectedLightZoneScheduleId = Schedule.LightZoneSchedule.Id;
+        }
+        else if (LightZoneSchedules.Any())
+        {
+            SelectedLightZoneScheduleId = LightZoneSchedules.First().Id;
+        }
+
+        IsLoading = false;
+    }
+
+    private void Save()
+    {
+        if (form != null && !IsLoading)
+        {
+            Schedule.Recipe.Id = SelectedRecipeId;
+            var recipe = Recipes.FirstOrDefault(r => r.Id == SelectedRecipeId);
+            if (recipe != null)
+            {
+                Schedule.Recipe.Name = recipe.Name;
+            }
+
+            Schedule.LightZoneSchedule.Id = SelectedLightZoneScheduleId;
+            var lzs = LightZoneSchedules.FirstOrDefault(l => l.Id == SelectedLightZoneScheduleId);
+            if (lzs != null)
+            {
+                Schedule.LightZoneSchedule.LightZone.Name = lzs.LightZone.Name;
+            }
+            MudDialog.Close(DialogResult.Ok(Schedule));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

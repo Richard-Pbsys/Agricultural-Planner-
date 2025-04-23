@@ -1,0 +1,46 @@
+﻿@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
+@inject LocalStorage LocalStorage
+
+<AuthorizeView>
+    <Authorized>
+        <MudAvatar Class="mx-1">
+            <MudImage Src="@context.User.FindFirst("picture")?.Value"></MudImage>
+        </MudAvatar>
+        <MudText Align="Align.End" Class="mx-1" Color="Color.Inherit">@context.User.Identity?.Name</MudText>
+        <MudMenu Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Medium" Color="Color.Default" Edge="Edge.End">
+            <MudMenuItem ForceLoad IconColor="Color.Default" Label="Profile" OnClick="@((e) => UserProfile())" />
+            <MudMenuItem ForceLoad IconColor="Color.Default" Label="Settings" OnClick="@((e) => UserSettings())" />
+            <MudMenuItem ForceLoad IconColor="Color.Default" Label="Security" OnClick="@((e) => UserSecurity())" />
+            <MudMenuItem ForceLoad IconColor="Color.Default" Label="Logout" OnClick="@((e) => LogoutAsync())" />
+        </MudMenu>
+    </Authorized>
+    <NotAuthorized>
+        <MudLink Href="authentication/login" Color="Color.Default" Class="mx-1">Login</MudLink>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    void UserProfile()
+    {
+        Navigation.NavigateTo("user/profile");
+    }
+
+    void UserSettings()
+    {
+        Navigation.NavigateTo("user/settings");
+    }
+
+    void UserSecurity()
+    {
+        Navigation.NavigateTo("user/security");
+    }
+
+    async Task LogoutAsync()
+    {
+        await LocalStorage.RemoveStateAsync("VHS_USER");
+        await LocalStorage.RemoveStateAsync("VHS_USER_SETTINGS");
+        Navigation.NavigateToLogout("authentication/logout");
+    }
+}

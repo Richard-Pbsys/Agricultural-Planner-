@@ -1,0 +1,61 @@
+﻿@inject IStringLocalizer<Shared> Localizer
+
+<MudNavMenu Class="sidebar-nav">
+    <MudText Color="Color.Default" Class="sidebar-menu-parent" Typo="Typo.subtitle2">
+        Main Menu
+    </MudText>
+@*     <div class="sidebar-menu-child">
+        <MudNavLink Href="/dashboard" Match="NavLinkMatch.All" Class="sidebar-menu-link">
+            <i class="bi bi-speedometer2"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["Dashboard"]</MudText>
+        </MudNavLink>
+    </div> *@
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/farm-overview" Match="NavLinkMatch.All" Class="sidebar-menu-link">
+            <i class="bi bi-building-up"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["FarmOverview"]</MudText>
+        </MudNavLink>
+    </div>
+   @*  <MudText Color="Color.Default" Class="sidebar-menu-parent" Typo="Typo.subtitle2">
+        Workspace
+    </MudText>
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/clients-contracts" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-person-vcard"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["ClientsContracts"]</MudText>
+        </MudNavLink>
+    </div>
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/orders-prognoses" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-calendar-week"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["OrdersPrognoses"]</MudText>
+        </MudNavLink>
+    </div>
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/grow-schedule" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-clipboard-data"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["GrowSchedule"]</MudText>
+        </MudNavLink>
+    </div>
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/capacity-analysis" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-pie-chart"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["CapacityAnalysis"]</MudText>
+        </MudNavLink>
+    </div> *@
+    <MudText Color="Color.Default" Class="sidebar-menu-parent" Typo="Typo.subtitle2">
+        General
+    </MudText>
+    @* <div class="sidebar-menu-child">
+        <MudNavLink Href="/produce-recipes" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-card-list"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["ProduceRecipes"]</MudText>
+        </MudNavLink>
+    </div> *@
+    <div class="sidebar-menu-child">
+        <MudNavLink Href="/system-settings" Match="NavLinkMatch.Prefix" Class="sidebar-menu-link">
+            <i class="bi bi-gear"></i>
+            <MudText Color="Color.Default" Class="sidebar-menu-text">@Localizer["SystemSettings"]</MudText>
+        </MudNavLink>
+    </div>
+</MudNavMenu>

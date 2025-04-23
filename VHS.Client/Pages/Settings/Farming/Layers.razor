@@ -1,0 +1,119 @@
+﻿@page "/system-settings/farm/layers"
+@using VHS.Services.Farming.DTO
+@using VHS.Client.Services.Farming
+@using VHS.Services.Common.DataGrid
+@using VHS.Services.Common.DataGrid.Enums
+@inject LayerClientService LayerClientService
+@inject RackClientService RackClientService
+@inject ISnackbar Snackbar
+
+<FarmSettings>
+    <MudDataGrid @ref="dataGrid" T="LayerDTO" ServerData="LoadLayerData">
+        <ToolBarContent>
+            <MudText Typo="Typo.h5" Color="Color.Default">Layers</MudText>
+            <MudSpacer />
+            @if (!IsLoading && RackList.Any())
+            {
+                <MudSelect T="Guid" Label="Select Rack" Variant="Variant.Outlined" Value="@SelectedRackId" ValueChanged="OnRackChanged">
+                    @foreach (var rack in RackList)
+                    {
+                        <MudSelectItem Value="@rack.Id">
+                            <strong>Floor:</strong> @rack.Floor.Name <strong>Rack: </strong> @rack.Name (@rack.TypeName)
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </ToolBarContent>
+        <Columns>
+            @if (!IsLoading && RackList.Any())
+            {
+                <PropertyColumn Property="x => x.LayerNumber" Title="Layer Number" Sortable="true" />
+                <PropertyColumn Property="x => x.HasRoom" Title="Has Room" Sortable="true" />
+                <TemplateColumn Title="Enabled" Sortable="true">
+                    <CellTemplate Context="context">
+                        <MudChip Color="@(context.Item.Enabled ? Color.Success : Color.Error)" Label="true" Variant="Variant.Outlined" Size="Size.Medium">
+                            @(context.Item.Enabled ? "Yes" : "No")
+                        </MudChip>
+                    </CellTemplate>
+                </TemplateColumn>
+            }
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager Items="@LayerList" />
+        </PagerContent>
+    </MudDataGrid>
+    @if (!LayerList.Any())
+    {
+        <MudAlert Severity="Severity.Info">No layers found.</MudAlert>
+    }
+</FarmSettings>
+
+@code {
+    private MudDataGrid<LayerDTO> dataGrid = new();
+    private Guid SelectedRackId { get; set; } = Guid.Empty;
+    private List<RackDTO> RackList = new();
+    private List<LayerDTO> LayerList = new();
+    private int TotalLayerCount;
+    private bool IsLoading;
+
+    private RackDTO? SelectedRack => RackList.FirstOrDefault(r => r.Id == SelectedRackId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRacks();
+        if (RackList.Any())
+        {
+            SelectedRackId = RackList.First().Id;
+            await dataGrid.ReloadServerData();
+        }
+    }
+
+    private async Task LoadRacks()
+    {
+        var racks = await RackClientService.GetAllRacksAsync();
+        if (racks != null)
+        {
+            RackList = racks.ToList();
+        }
+    }
+
+    private async Task<GridData<LayerDTO>> LoadLayerData(GridState<LayerDTO> state)
+    {
+        if (SelectedRackId == Guid.Empty)
+        {
+            return new GridData<LayerDTO> { Items = new List<LayerDTO>(), TotalItems = 0 };
+        }
+
+        IsLoading = true;
+
+        var sortColumn = state.SortDefinitions.FirstOrDefault();
+        var sortLabel = sortColumn?.SortBy ?? nameof(LayerDTO.LayerNumber);
+        var sortDirection = (sortColumn?.Descending ?? false)
+            ? SortDirectionEnum.Descending
+            : SortDirectionEnum.Ascending;
+
+        var response = await LayerClientService.GetLayersByRackAsync(
+            SelectedRackId,
+            state.Page,
+            state.PageSize,
+            sortLabel,
+            sortDirection
+        );
+
+        IsLoading = false;
+        LayerList = response?.Items?.ToList() ?? new List<LayerDTO>();
+        TotalLayerCount = response?.TotalCount ?? 0;
+
+        return new GridData<LayerDTO>
+            {
+                Items = LayerList,
+                TotalItems = TotalLayerCount
+            };
+    }
+
+    private async Task OnRackChanged(Guid newRackId)
+    {
+        SelectedRackId = newRackId;
+        await dataGrid.ReloadServerData();
+    }
+}

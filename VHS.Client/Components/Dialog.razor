@@ -1,0 +1,29 @@
+﻿<MudDialog>
+    <TitleContent>@Title</TitleContent>
+    <DialogContent>
+        @ChildContent
+    </DialogContent>
+    <DialogActions>
+        @if (ShowDefaultActions)
+        {
+            <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+            <MudButton OnClick="Submit" Variant="Variant.Outlined" Color="Color.Primary">Submit</MudButton>
+        }
+        else
+        {
+            @ActionsContent
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? ActionsContent { get; set; }
+    [Parameter] public string Title { get; set; } = "Dialog";
+    [Parameter] public bool ShowDefaultActions { get; set; } = true;
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(true));
+    private void Cancel() => MudDialog.Cancel();
+}

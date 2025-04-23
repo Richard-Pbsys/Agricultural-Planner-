@@ -1,0 +1,67 @@
+﻿@using VHS.Services.Growth.DTO
+@using VHS.Services.Farming.DTO
+@using VHS.Client.Services.Farming
+@using Microsoft.AspNetCore.Components.Forms
+@inject ISnackbar Snackbar
+@inject FarmClientService FarmClientService
+
+<Dialog Title="@DialogTitle" ShowDefaultActions="false">
+    <ChildContent>
+        <MudForm Model="WaterZone" @ref="form" Immediate="true">
+            @if (!IsLoading)
+            {
+                <MudSelect T="Guid" Label="Farm" @bind-Value="SelectedFarmId" Variant="Variant.Outlined" Required="true">
+                    @foreach (var farm in Farms)
+                    {
+                        <MudSelectItem Value="@farm.Id">@farm.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+            <MudTextField @bind-Value="WaterZone.Name" Label="Name" Variant="Variant.Outlined" Required="true" />
+            <MudNumericField T="double?" @bind-Value="WaterZone.TargetDWR" Label="Target DWR" HelperText="Daily Water Requirement (DWR) in L/m²/d" Variant="Variant.Outlined" />
+        </MudForm>
+    </ChildContent>
+    <ActionsContent>
+        <MudButton OnClick="Cancel" Variant="Variant.Outlined" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="Save" Disabled="@(form == null || IsLoading)" Variant="Variant.Filled" Color="Color.Primary">Save</MudButton>
+    </ActionsContent>
+</Dialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public WaterZoneDTO WaterZone { get; set; } = new WaterZoneDTO();
+
+    private MudForm form = new MudForm();
+    private List<FarmDTO> Farms = new List<FarmDTO>();
+    private Guid SelectedFarmId { get; set; } = Guid.Empty;
+
+    private string DialogTitle => WaterZone.Id == Guid.Empty ? "Add Water Zone" : "Edit Water Zone";
+
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Farms = (await FarmClientService.GetAllFarmsAsync())?.ToList() ?? new List<FarmDTO>();
+
+        if (WaterZone.FarmId != Guid.Empty)
+        {
+            SelectedFarmId = WaterZone.FarmId;
+        }
+        else if (Farms.Any())
+        {
+            SelectedFarmId = Farms.First().Id;
+        }
+        IsLoading = false;
+    }
+
+    private void Save()
+    {
+        if (form != null && !IsLoading)
+        {
+            WaterZone.FarmId = SelectedFarmId;
+            MudDialog.Close(DialogResult.Ok(WaterZone));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}
