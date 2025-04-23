@@ -1,0 +1,7 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/VHS.Client/bin/Debug/net9.0
+/VHS.Client/obj
+/VHS.Data/.vs/VHS.Data
